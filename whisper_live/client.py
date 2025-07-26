@@ -41,6 +41,7 @@ class Client:
         target_language="fr",
         translation_callback=None,
         translation_srt_file_path="output_translated.srt",
+        initial_prompt=None,
     ):
         """
         Initializes a Client instance for audio recording and streaming to a server.
@@ -88,6 +89,7 @@ class Client:
         self.clip_audio = clip_audio
         self.same_output_threshold = same_output_threshold
         self.transcription_callback = transcription_callback
+        self.initial_prompt = initial_prompt
 
         # Translation-specific attributes
         self.enable_translation = enable_translation
@@ -177,12 +179,16 @@ class Client:
                 return
         
         if self.log_transcription:
-            original_text = [seg["text"] for seg in self.transcript[-4:]]
+            # original_text = [seg["text"] for seg in self.transcript[-4:]]
+            # if self.last_segment is not None and self.last_segment["text"] not in original_text:
+            #     original_text.append(self.last_segment["text"])
+            
+            # utils.clear_screen()
+            # utils.print_transcript(original_text)
+            original_text = [seg["text"] for seg in self.transcript]
             if self.last_segment is not None and self.last_segment["text"] not in original_text:
                 original_text.append(self.last_segment["text"])
-            
-            utils.clear_screen()
-            utils.print_transcript(original_text)
+            print(f"[test]ORIGINAL output:", "".join(original_text))
             if self.enable_translation:
                 print(f"\n\nTRANSLATION to {self.target_language}:")
                 utils.print_transcript([seg["text"] for seg in self.translated_transcript[-4:]], translated=True)
@@ -201,6 +207,7 @@ class Client:
 
         """
         message = json.loads(message)
+        print("[test] received message:", message)
 
         if self.uid != message.get("uid"):
             print("[ERROR]: invalid client uid")
@@ -271,6 +278,7 @@ class Client:
                     "same_output_threshold": self.same_output_threshold,
                     "enable_translation": self.enable_translation,
                     "target_language": self.target_language,
+                    "initial_prompt": self.initial_prompt,
                 }
             )
         )
@@ -490,8 +498,9 @@ class TranscriptionTeeClient:
 
             except KeyboardInterrupt:
                 wavfile.close()
-                self.stream.stop_stream()
-                self.stream.close()
+                if self.stream:
+                    self.stream.stop_stream()
+                    self.stream.close()
                 self.p.terminate()
                 self.close_all_clients()
                 self.write_all_clients_srt()
@@ -790,6 +799,7 @@ class TranscriptionClient(TranscriptionTeeClient):
         target_language="fr",
         translation_callback=None,
         translation_srt_file_path="./output_translated.srt",
+        initial_prompt=None,
     ):
         self.client = Client(
             host,
@@ -810,6 +820,7 @@ class TranscriptionClient(TranscriptionTeeClient):
             target_language=target_language,
             translation_callback=translation_callback,
             translation_srt_file_path=translation_srt_file_path,
+            initial_prompt=initial_prompt,
         )
 
         if save_output_recording and not output_recording_filename.endswith(".wav"):

@@ -1336,6 +1336,7 @@ class WhisperModel:
                 * self.feature_extractor.time_per_frame,
             )
         pbar.close()
+        print("[test]2 all_segments: ", all_segments) # TODO * @jjm just for debug
         return all_segments
 
     def encode(self, features: np.ndarray) -> ctranslate2.StorageView:

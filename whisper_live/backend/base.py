@@ -332,7 +332,9 @@ class ServeClientBase(object):
                 )
 
         # Handle repeated output logic.
+        is_same_output = False
         if self.current_out.strip() == self.prev_out.strip() and self.current_out != '':
+            is_same_output = True
             self.same_output_count += 1
 
             # if we remove the audio because of same output on the nth reptition we might remove the 
@@ -346,6 +348,8 @@ class ServeClientBase(object):
 
         # If the same incomplete segment is repeated too many times,
         # append it to the transcript and update the offset.
+        not_output_because_same_output = is_same_output and self.same_output_count <= self.same_output_threshold
+        print("same_output_count: ", self.same_output_count, "is_same_output: ", is_same_output, "not_output_because_same_output: ", not_output_because_same_output)
         if self.same_output_count > self.same_output_threshold:
             if not self.text or self.text[-1].strip().lower() != self.current_out.strip().lower():
                 self.text.append(self.current_out)
@@ -376,4 +380,4 @@ class ServeClientBase(object):
             with self.lock:
                 self.timestamp_offset += offset
 
-        return last_segment
+        return last_segment, not_output_because_same_output

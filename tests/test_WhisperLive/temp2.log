@@ -1,0 +1,65 @@
+[INFO]: * recording
+[WARN]: Unable to access microphone. [Errno -9996] Invalid input device (no default output device)
+[INFO]: Waiting for server ready ...
+[INFO]: Opened connection
+received message: {'uid': '14d24ee1-0147-42b1-96f9-810afcfcaf48', 'message': 'SERVER_READY', 'backend': 'faster_whisper'}
+[INFO]: Server Running with backend faster_whisper
+[INFO]: Server Ready!
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-108: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-109: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-111: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-113: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-118: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: [ERROR] WebSocket Error: 'charmap' codec can't encode characters in position 105-115: character maps to <undefined>
+received message: 

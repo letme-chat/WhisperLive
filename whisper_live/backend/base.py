@@ -296,6 +296,7 @@ class ServeClientBase(object):
         offset = None
         self.current_out = ''
         last_segment = None
+        changing_segments = []
 
         # Process complete segments only if there are more than one
         # and if the last segment's no_speech_prob is below the threshold.
@@ -312,6 +313,7 @@ class ServeClientBase(object):
                     continue
                 completed_segment = self.format_segment(start, end, text_, completed=True)
                 self.transcript.append(completed_segment)
+                changing_segments.append(completed_segment)
 
                 if self.translation_queue:
                     try:
@@ -361,6 +363,7 @@ class ServeClientBase(object):
                         completed=True
                     )
                     self.transcript.append(completed_segment)
+                    changing_segments.append(completed_segment)
 
                     if self.translation_queue:
                         try:
@@ -380,4 +383,7 @@ class ServeClientBase(object):
             with self.lock:
                 self.timestamp_offset += offset
 
-        return last_segment, not_output_because_same_output
+        if last_segment is not None:
+            changing_segments = changing_segments + [last_segment]
+        print(f"[test] input: segments: {segments}, output: last_segment: {last_segment}, not_output_because_same_output: {not_output_because_same_output}, changing_segments: {changing_segments}")
+        return last_segment, not_output_because_same_output, changing_segments

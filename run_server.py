@@ -37,7 +37,7 @@ if __name__ == "__main__":
                         help='Maximum clients supported by the server.')
     parser.add_argument('--max_connection_time',
                         type=int,
-                        default=300,
+                        default=7200,
                         help='Path to cache the converted ctranslate2 models.')
     parser.add_argument('--cache_path', '-c',
                         type=str,

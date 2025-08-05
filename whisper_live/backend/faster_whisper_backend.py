@@ -229,10 +229,11 @@ class ServeClientFasterWhisper(ServeClientBase):
         segments = []
         if len(result):
             self.t_start = None
-            last_segment, not_output_because_same_output = self.update_segments(result, duration)
+            last_segment, not_output_because_same_output, changing_segments = self.update_segments(result, duration)
             if not_output_because_same_output:
                 return
-            segments = self.prepare_segments(last_segment)
+            # segments = self.prepare_segments(last_segment)
+            segments = changing_segments
 
-        if len(segments):
+        if len(segments): # and not not_output_because_same_output
             self.send_transcription_to_client(segments)

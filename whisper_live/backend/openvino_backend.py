@@ -141,7 +141,7 @@ class ServeClientOpenVINO(ServeClientBase):
         segments = []
         if len(result):
             self.t_start = None
-            last_segment, _ = self.update_segments(result, duration)
+            last_segment, _, _ = self.update_segments(result, duration)
             segments = self.prepare_segments(last_segment)
 
         if len(segments):

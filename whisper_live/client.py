@@ -13,6 +13,8 @@ import time
 import av
 import whisper_live.utils as utils
 
+NEED_WRITE_SRT = False
+
 
 class Client:
     """
@@ -428,6 +430,8 @@ class TranscriptionTeeClient:
 
     def write_all_clients_srt(self):
         """Writes out .srt files for all clients."""
+        if not NEED_WRITE_SRT:
+            return
         for client in self.clients:
             client.write_srt_file(client.srt_file_path)
 

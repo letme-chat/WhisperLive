@@ -249,6 +249,7 @@ class TranscriptionServer:
                 if faster_whisper_custom_model_path is not None:
                     logging.info(f"Using custom model {faster_whisper_custom_model_path}")
                     options["model"] = faster_whisper_custom_model_path
+                # logging.debug(f"[test] options:{options}")
                 client = ServeClientFasterWhisper(
                     websocket,
                     language=options["language"],

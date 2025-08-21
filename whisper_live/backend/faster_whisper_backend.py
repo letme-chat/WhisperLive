@@ -76,6 +76,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.language = "en" if self.model_size_or_path.endswith("en") else language
         self.task = task
         self.initial_prompt = initial_prompt
+        logging.debug(f"[test] vad_parameters:{vad_parameters}")
         self.vad_parameters = vad_parameters or {"onset": 0.5}
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -210,6 +211,9 @@ class ServeClientFasterWhisper(ServeClientBase):
             language=self.language,
             task=self.task,
             vad_filter=self.use_vad,
+            condition_on_previous_text=False,
+            word_timestamps=True,
+            hallucination_silence_threshold=2.0,
             vad_parameters=self.vad_parameters if self.use_vad else None)
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()

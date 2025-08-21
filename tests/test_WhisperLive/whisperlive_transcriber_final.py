@@ -187,7 +187,7 @@ class WhisperLiveTranscriber:
                                 self.transcript.append(seg)
                                 if LOG_ALL_TRANSCRIPT:
                                     self.all_transcript_text += seg_text
-                                    print(f"[INFO]: all transcript:{self.all_transcript_text}")
+                                    print(f"[INFO] self.uid:{self.uid} all transcript:{self.all_transcript_text}")
                                 KEEP_LAST_CNT = 3
                                 if len(self.transcript) > KEEP_LAST_CNT: # keep last 2 segements only
                                     self.transcript = self.transcript[-KEEP_LAST_CNT:]
@@ -370,9 +370,10 @@ if __name__ == "__main__":
         print("on_close")
 
     ws_sr = WhisperLiveTranscriber(
-        endpoint="ws://localhost:9090",
+        endpoint="ws://localhost:10090",
         language="zh",
-        initial_prompt="下面是一些IT面试问题。",
+        # initial_prompt="下面是一些IT面试问题。",
+        initial_prompt="下面是一些技术面试问题。",
         on_sentence_begin=on_sentence_begin,
         on_sentence_end=on_sentence_end,
         on_start=on_start,
@@ -384,7 +385,8 @@ if __name__ == "__main__":
     ws_sr.start()
     import wave
     # wav_path="/root/workroot/opensources/funasr-runtime-resources/samples/audio/asr_example.wav"
-    wav_path = "../../../samples/audio/中英混杂技术名词-男.wav"
+    # wav_path = "../../../samples/audio/中英混杂技术名词-男.wav"
+    wav_path = "./中英混杂技术名词-男.wav"
     #wav_path="/root/workroot/opensources/funasr-runtime-resources/samples/audio/asr_example.pcm"
     with wave.open(wav_path, "rb") as wav_file:
                 params = wav_file.getparams()
@@ -393,14 +395,16 @@ if __name__ == "__main__":
     stride = int(60 * 10 / 10 / 1000 * 16000 * 2)
     chunk_num = (len(audio_bytes) - 1) // stride + 1
     # loop to send chunk
-    for i in range(chunk_num):
-        beg = i * stride
-        data = audio_bytes[beg:beg + stride]
-        ws_sr.send_audio(data)
-        print("Sent chunk:", i)
-        time.sleep(0.05)
-    # print("start sleep 10s")
-    time.sleep(10)
+    TIMES = 1
+    for j in range(TIMES):
+        for i in range(chunk_num):
+            beg = i * stride
+            data = audio_bytes[beg:beg + stride]
+            ws_sr.send_audio(data)
+            print("Sent chunk:", i)
+            time.sleep(0.05)
+        # print("start sleep 10s")
+        time.sleep(10)
     print("will stop")
     ws_sr.stop()
     print("stopped")

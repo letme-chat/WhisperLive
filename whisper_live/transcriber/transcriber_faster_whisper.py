@@ -706,7 +706,7 @@ class WhisperModel:
         temperature: Union[float, List[float], Tuple[float, ...]] = [
             0.0,
             0.2,
-            0.4,
+            0.4, # 注释后容易出现幻觉，如那那那那无限循环。
             0.6,
             0.8,
             1.0,
@@ -949,6 +949,7 @@ class WhisperModel:
             hallucination_silence_threshold=hallucination_silence_threshold,
             hotwords=hotwords,
         )
+        self.logger.debug(f"WhisperModel transcribe options:{options}, vad_parameters:{vad_parameters}")
 
         segments = self.generate_segments(
             features, tokenizer, options, log_progress, encoder_output
@@ -1336,7 +1337,7 @@ class WhisperModel:
                 * self.feature_extractor.time_per_frame,
             )
         pbar.close()
-        print("[test]2 all_segments: ", all_segments) # TODO * @jjm just for debug
+        self.logger.info(f"generate_segments result all_segments: {all_segments}") # segments with words
         return all_segments
 
     def encode(self, features: np.ndarray) -> ctranslate2.StorageView:

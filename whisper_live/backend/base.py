@@ -4,6 +4,9 @@ import threading
 import time
 import queue
 import numpy as np
+import re
+from whisper_live.backend.hallucination_segments_filter import HallucinationDetectorManager
+from whisper_live.transcriber.transcriber_faster_whisper import Segment
 
 
 class ServeClientBase(object):
@@ -54,9 +57,34 @@ class ServeClientBase(object):
         self.end_time_for_same_output = None
         self.translation_queue = translation_queue
 
+        self.hallucination_detector = HallucinationDetectorManager()
+
         # threading
         self.lock = threading.Lock()
+        # 添加文本规范化相关的配置
+        self.normalize_text = True  # 是否启用文本规范化
+        self.normalization_pattern = re.compile(r'[\s\-_,.;:!?]+')  # 要移除的字符模式
 
+    def normalize_output_text(self, text):
+        """
+        规范化文本以便比较，移除大小写、空格、连字符和标点符号差异。
+        
+        Args:
+            text (str): 要规范化的文本
+            
+        Returns:
+            str: 规范化后的文本
+        """
+        if not self.normalize_text or not text:
+            return text
+            
+        # 转换为小写
+        text = text.lower()
+        
+        # 移除所有空格、连字符和常见标点符号
+        text = self.normalization_pattern.sub('', text)
+        
+        return text
     def speech_to_text(self):
         """
         Process an audio stream in an infinite loop, continuously transcribing the speech.
@@ -73,6 +101,8 @@ class ServeClientBase(object):
 
         """
         while True:
+            if self.frames_np is not None:
+                logging.debug(f"self.timestamp_offset: {self.timestamp_offset}, self.frames_offset: {self.frames_offset}, self.frames_np.shape[0]: {self.frames_np.shape[0]}, self.RATE: {self.RATE}")
             if self.exit:
                 logging.info("Exiting speech to text thread")
                 break
@@ -84,6 +114,8 @@ class ServeClientBase(object):
                 self.clip_audio_if_no_valid_segment()
 
             input_bytes, duration = self.get_audio_chunk_for_processing()
+            if self.frames_np is not None:
+                logging.debug(f"self.timestamp_offset: {self.timestamp_offset}, self.frames_offset: {self.frames_offset}, self.frames_np.shape[0]: {self.frames_np.shape[0]}, self.RATE: {self.RATE}, input_bytes: {input_bytes.shape}, duration: {duration}")
             if duration < 1.0:
                 time.sleep(0.1)     # wait for audio chunks to arrive
                 continue
@@ -281,6 +313,123 @@ class ServeClientBase(object):
     def get_segment_end(self, segment):
         return getattr(segment, "end", getattr(segment, "end_ts", 0))
 
+    def split_segments(self, segment):
+        """
+        按照标点符号分割长段落，优先按句子分割（。？！等），没有句子才按逗号等分割。
+        
+        Args:
+            segment: 要分割的Segment对象
+            
+        Returns:
+            list: 分割后的Segment对象列表
+        """
+        # 定义分割符优先级：先按句子分割，再按逗号分割
+        sentence_delimiters = ['。', '？', '！', ';', '；', '?', '!']
+        comma_delimiters = ['，', ',', '、']
+        
+        text = segment.text
+        words = getattr(segment, 'words', [])
+        
+        # 如果没有words信息，无法准确分割，返回原segment
+        if not words:
+            return [segment]
+        
+        # 计算每个字符在words中的位置映射
+        char_to_word_idx = []
+        for word_idx, word in enumerate(words):
+            for char_idx in range(len(word.word)):
+                char_to_word_idx.append(word_idx)
+        
+        # 查找分割点
+        split_indices = []
+        ignore_last = 10                      # 忽略最后 10 个字符
+        effective_len = max(len(text) - ignore_last, 0)
+        for i, char in enumerate(text):
+            if char in sentence_delimiters and i < effective_len:
+                split_indices.append(i + 1)  # 包含分割符
+        if not split_indices:
+            # 如果没有句子分割符，按逗号分割
+            for i, char in enumerate(text):
+                if char in comma_delimiters and i < effective_len:
+                    split_indices.append(i + 1)
+        
+        # 如果没有找到分割点，返回原segment
+        if not split_indices:
+            return [segment]
+        
+        # 确保最后一个分割点不超过文本长度
+        if split_indices[-1] > len(text):
+            split_indices[-1] = len(text)
+        
+        # 创建新的segments
+        new_segments = []
+        word_start_idx = 0
+        last_text_split_idx = 0
+        
+        for split_idx in split_indices:
+            # 确定分割点对应的word索引
+            if split_idx >= len(char_to_word_idx):
+                word_end_idx = len(words) - 1
+            else:
+                word_end_idx = char_to_word_idx[split_idx - 1]
+            
+            # 提取当前分段的words
+            segment_words = words[word_start_idx:word_end_idx + 1]
+            
+            # 提取当前分段的文本
+            segment_text = text[last_text_split_idx:split_idx]
+            
+            # 计算当前分段的开始和结束时间
+            segment_start = words[word_start_idx].start if segment_words else 0
+            segment_end = words[word_end_idx].end if segment_words else 0
+            
+            # 创建新的segment对象
+            # new_segment = segment.__class__(
+            new_segment = Segment(
+                id=len(new_segments),
+                seek=segment.seek,
+                start=segment_start,
+                end=segment_end,
+                text=segment_text,
+                tokens=[],  # 无法准确分割tokens，留空
+                avg_logprob=segment.avg_logprob,
+                compression_ratio=segment.compression_ratio,
+                no_speech_prob=segment.no_speech_prob,
+                words=segment_words,
+                temperature=segment.temperature
+            )
+            
+            new_segments.append(new_segment)
+            word_start_idx = word_end_idx + 1
+            last_text_split_idx = split_idx
+        
+        # 处理最后一段
+        if word_start_idx < len(words):
+            segment_words = words[word_start_idx:]
+            segment_text = text[last_text_split_idx:]
+            
+            segment_start = words[word_start_idx].start if segment_words else 0
+            segment_end = words[-1].end if segment_words else 0
+            
+            # new_segment = segment.__class__(
+            new_segment = Segment(
+                id=len(new_segments),
+                seek=segment.seek,
+                start=segment_start,
+                end=segment_end,
+                text=segment_text,
+                tokens=[],
+                avg_logprob=segment.avg_logprob,
+                compression_ratio=segment.compression_ratio,
+                no_speech_prob=segment.no_speech_prob,
+                words=segment_words,
+                temperature=segment.temperature
+            )
+            
+            new_segments.append(new_segment)
+        
+        return new_segments
+    
     def update_segments(self, segments, duration):
         """
         Processes the segments from Whisper and updates the transcript.
@@ -298,6 +447,32 @@ class ServeClientBase(object):
         last_segment = None
         changing_segments = []
 
+        # Process the last segment if its no_speech_prob is acceptable.
+        if self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
+            maybe_hullucination = False
+            start_time = self.get_segment_start(segments[-1])
+            end_time = self.get_segment_end(segments[-1])
+            if end_time > duration + 0.1:
+                logging.info(f"maybe hallucination as segment end time {end_time} is greater than duration {duration} + 0.1")
+                maybe_hullucination = True
+            if not maybe_hullucination and self.hallucination_detector.detect_hallucination(segments[-1]):
+                # print(f"segment maybe hallucination")
+                maybe_hullucination = True
+            if not maybe_hullucination:
+                if len(segments) == 1 and end_time - start_time > 15.0 and self.language in ["zh", "en"]:
+                    logging.info(f"[test]long segment duration {end_time - start_time} is greater than 15.0, split to small segments, then process. self.language : {self.language}")
+                    # TODO language
+                    splited_segments = self.split_segments(segments[0])
+                    # 用分割后的segments替换原始segments
+                    segments = splited_segments
+                self.current_out += segments[-1].text
+                with self.lock:
+                    last_segment = self.format_segment(
+                        self.timestamp_offset + self.get_segment_start(segments[-1]),
+                        self.timestamp_offset + min(duration, self.get_segment_end(segments[-1])),
+                        self.current_out,
+                        completed=False
+                    )
         # Process complete segments only if there are more than one
         # and if the last segment's no_speech_prob is below the threshold.
         if len(segments) > 1 and self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
@@ -322,20 +497,14 @@ class ServeClientBase(object):
                         logging.warning("Translation queue is full, skipping segment")
                 offset = min(duration, self.get_segment_end(s))
 
-        # Process the last segment if its no_speech_prob is acceptable.
-        if self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
-            self.current_out += segments[-1].text
-            with self.lock:
-                last_segment = self.format_segment(
-                    self.timestamp_offset + self.get_segment_start(segments[-1]),
-                    self.timestamp_offset + min(duration, self.get_segment_end(segments[-1])),
-                    self.current_out,
-                    completed=False
-                )
 
         # Handle repeated output logic.
         is_same_output = False
-        if self.current_out.strip() == self.prev_out.strip() and self.current_out != '':
+        normalized_current = self.normalize_output_text(self.current_out)
+        normalized_prev = self.normalize_output_text(self.prev_out)
+        # TODO * @jjm transcript the same ignore case and - etc.
+        # if self.current_out.strip() == self.prev_out.strip() and self.current_out != '':
+        if normalized_current == normalized_prev and normalized_current != '':
             is_same_output = True
             self.same_output_count += 1
 
@@ -351,7 +520,7 @@ class ServeClientBase(object):
         # If the same incomplete segment is repeated too many times,
         # append it to the transcript and update the offset.
         not_output_because_same_output = is_same_output and self.same_output_count <= self.same_output_threshold
-        print("same_output_count: ", self.same_output_count, "is_same_output: ", is_same_output, "not_output_because_same_output: ", not_output_because_same_output)
+        logging.debug(f"same_output_count: {self.same_output_count}, is_same_output: {is_same_output}, not_output_because_same_output: {not_output_because_same_output}")
         if self.same_output_count > self.same_output_threshold:
             if not self.text or self.text[-1].strip().lower() != self.current_out.strip().lower():
                 self.text.append(self.current_out)
@@ -385,5 +554,5 @@ class ServeClientBase(object):
 
         if last_segment is not None:
             changing_segments = changing_segments + [last_segment]
-        print(f"[test] input: segments: {segments}, output: last_segment: {last_segment}, not_output_because_same_output: {not_output_because_same_output}, changing_segments: {changing_segments}")
+        logging.info(f"IN: segments: {segments},\n OUT: last_segment: {last_segment}, \nnot_output_because_same_output: {not_output_because_same_output}, \nchanging_segments: {changing_segments}\nuser_id: {self.client_uid}")
         return last_segment, not_output_because_same_output, changing_segments

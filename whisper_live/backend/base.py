@@ -312,6 +312,15 @@ class ServeClientBase(object):
 
     def get_segment_end(self, segment):
         return getattr(segment, "end", getattr(segment, "end_ts", 0))
+    
+    def is_segment_invalid(self, segment):
+        no_speech_prob = self.get_segment_no_speech_prob(segment)
+        if no_speech_prob > self.no_speech_thresh:
+            return True
+        if segment.avg_logprob < -1.0 - 0.1: # TODO @jjm pass in log_prob_threshold
+            return True
+        return False
+
 
     def split_segments(self, segment):
         """
@@ -448,7 +457,8 @@ class ServeClientBase(object):
         changing_segments = []
 
         # Process the last segment if its no_speech_prob is acceptable.
-        if self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
+        # if self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
+        if not self.is_segment_invalid(segments[-1]):
             maybe_hullucination = False
             start_time = self.get_segment_start(segments[-1])
             end_time = self.get_segment_end(segments[-1])
@@ -475,7 +485,8 @@ class ServeClientBase(object):
                     )
         # Process complete segments only if there are more than one
         # and if the last segment's no_speech_prob is below the threshold.
-        if len(segments) > 1 and self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
+        # if len(segments) > 1 and self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
+        if len(segments) > 1 and not self.is_segment_invalid(segments[-1]):
             for s in segments[:-1]:
                 text_ = s.text
                 self.text.append(text_)
@@ -484,7 +495,8 @@ class ServeClientBase(object):
                     end = self.timestamp_offset + min(duration, self.get_segment_end(s))
                 if start >= end:
                     continue
-                if self.get_segment_no_speech_prob(s) > self.no_speech_thresh:
+                # if self.get_segment_no_speech_prob(s) > self.no_speech_thresh:
+                if self.is_segment_invalid(s):
                     continue
                 completed_segment = self.format_segment(start, end, text_, completed=True)
                 self.transcript.append(completed_segment)

@@ -86,7 +86,7 @@ class WhisperLiveTranscriber:
                 # "send_last_n_segments": self.send_last_n_segments,
                 "no_speech_thresh": 0.45,
                 "clip_audio": False,
-                "same_output_threshold": 10,
+                "same_output_threshold": 5,
                 "initial_prompt": self.initial_prompt
             })
             ws.send(init_msg)

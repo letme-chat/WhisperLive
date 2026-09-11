@@ -3,12 +3,16 @@ import logging
 import threading
 import time
 import queue
+import traceback
 import numpy as np
 import re
 from whisper_live.backend.hallucination_segments_filter import HallucinationDetectorManager
-from whisper_live.transcriber.transcriber_faster_whisper import Segment
+from whisper_live.transcriber.transcriber_faster_whisper import Segment, TranscriptionInfo
 
-
+SPLIT_SEGMENTS_BY_PAUSE_THRESHOLD = 1.8
+sentence_delimiters = ['。', '？', '！', ';', '；', '?', '!']
+comma_delimiters = ['，', ',', '、']
+ALL_DELIMITERS = sentence_delimiters + comma_delimiters
 class ServeClientBase(object):
     RATE = 16000
     SERVER_READY = "SERVER_READY"
@@ -130,7 +134,7 @@ class ServeClientBase(object):
                 self.handle_transcription_output(result, duration)
 
             except Exception as e:
-                logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
+                logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}, traceback: {traceback.format_exc()}")
                 time.sleep(0.01)
 
     def transcribe_audio(self):
@@ -321,7 +325,99 @@ class ServeClientBase(object):
             return True
         return False
 
-
+    def split_segments_by_pause(self, segment, pause_threshold=SPLIT_SEGMENTS_BY_PAUSE_THRESHOLD):
+        """
+        根据时间间隔分割长段落，当两个word之间的间隔大于指定阈值且前一个word以标点符号结束时，在此处分割。
+        
+        Args:
+            segment: 要分割的Segment对象
+            pause_threshold: 时间间隔阈值（秒）
+            
+        Returns:
+            list: 分割后的Segment对象列表
+        """
+        words = getattr(segment, 'words', [])
+        
+        # 如果没有words信息或words数量不足，无法准确分割，返回原segment
+        if not words or len(words) < 2:
+            return [segment]
+        
+        # 查找需要分割的位置
+        split_indices = []
+        for i in range(1, len(words)):
+            # 计算当前word与前一个word之间的时间间隔
+            time_gap = words[i].start - words[i-1].end
+            if time_gap > pause_threshold:
+                # 检查前一个word是否以标点符号结束
+                prev_word_text = words[i-1].word.strip()
+                ends_with_punctuation = prev_word_text and prev_word_text[-1] in ALL_DELIMITERS
+                
+                # 如果时间间隔大于阈值且前一个word以标点符号结束，则在此处分割
+                if ends_with_punctuation:
+                    split_indices.append(i)  # 在第i个word前分割
+        
+        # 如果没有找到分割点，返回原segment
+        if not split_indices:
+            return [segment]
+        
+        # 创建新的segments
+        new_segments = []
+        word_start_idx = 0
+        
+        for split_idx in split_indices:
+            # 提取当前分段的words
+            segment_words = words[word_start_idx:split_idx]
+            
+            # 提取当前分段的文本
+            segment_text = ''.join([w.word for w in segment_words])
+            
+            # 计算当前分段的开始和结束时间
+            segment_start = words[word_start_idx].start if segment_words else 0
+            segment_end = words[split_idx-1].end if segment_words else 0
+            
+            # 创建新的segment对象
+            new_segment = Segment(
+                id=len(new_segments),
+                seek=segment.seek,
+                start=segment_start,
+                end=segment_end,
+                text=segment_text,
+                tokens=[],  # 无法准确分割tokens，留空
+                avg_logprob=segment.avg_logprob,
+                compression_ratio=segment.compression_ratio,
+                no_speech_prob=segment.no_speech_prob,
+                words=segment_words,
+                temperature=segment.temperature
+            )
+            
+            new_segments.append(new_segment)
+            word_start_idx = split_idx
+        
+        # 处理最后一段
+        if word_start_idx < len(words):
+            segment_words = words[word_start_idx:]
+            segment_text = ''.join([w.word for w in segment_words])
+            
+            segment_start = words[word_start_idx].start if segment_words else 0
+            segment_end = words[-1].end if segment_words else 0
+            
+            new_segment = Segment(
+                id=len(new_segments),
+                seek=segment.seek,
+                start=segment_start,
+                end=segment_end,
+                text=segment_text,
+                tokens=[],
+                avg_logprob=segment.avg_logprob,
+                compression_ratio=segment.compression_ratio,
+                no_speech_prob=segment.no_speech_prob,
+                words=segment_words,
+                temperature=segment.temperature
+            )
+            
+            new_segments.append(new_segment)
+        
+        return new_segments
     def split_segments(self, segment):
         """
         按照标点符号分割长段落，优先按句子分割（。？！等），没有句子才按逗号等分割。
@@ -332,9 +428,9 @@ class ServeClientBase(object):
         Returns:
             list: 分割后的Segment对象列表
         """
-        # 定义分割符优先级：先按句子分割，再按逗号分割
-        sentence_delimiters = ['。', '？', '！', ';', '；', '?', '!']
-        comma_delimiters = ['，', ',', '、']
+        # # 定义分割符优先级：先按句子分割，再按逗号分割
+        # sentence_delimiters = ['。', '？', '！', ';', '；', '?', '!']
+        # comma_delimiters = ['，', ',', '、']
         
         text = segment.text
         words = getattr(segment, 'words', [])
@@ -451,15 +547,43 @@ class ServeClientBase(object):
         Returns:
             dict or None: The last processed segment (if any).
         """
+        logging.info(f"IN: segments: {segments}, user_id: {self.client_uid}")
+        if not segments:
+            return None, False, []
         offset = None
         self.current_out = ''
         last_segment = None
         changing_segments = []
 
+        # if last vad is long, then set the last segment as completed.
+        # Note: to test this scenerio, keep the enviroment silence, and speak "123456789勾枯科"
+        last_segment_is_completed_by_last_vad_long = False
+        info = None
+        if segments and isinstance(segments[-1], TranscriptionInfo):
+            info = segments.pop()
+            speech_chunks_timestamp = info.speech_chunks_timestamp
+            last_end_timestamp = -1
+            sum_duration = 0
+            vad_duration_at_end = 0
+            for chunk in speech_chunks_timestamp:
+                start = chunk['start']
+                end = chunk['end']
+                current_duration = end - start
+                sum_duration = sum_duration + current_duration
+                last_end_timestamp = max(chunk['end'], last_end_timestamp)
+            if last_end_timestamp > 0 and last_end_timestamp < duration + 0.001:
+                vad_duration_at_end = duration - last_end_timestamp
+                if vad_duration_at_end > 2.0 and sum_duration > 0.5: # vad_duration_at_end is too long, set last_segment_is_completed_by_last_vad_long to True in case the result keep changing
+                    last_segment_is_completed_by_last_vad_long = True
+            logging.info(f"[test1]last_segment_is_completed_by_last_vad_long:{last_segment_is_completed_by_last_vad_long}, vad_duration_at_end: {vad_duration_at_end}, sum_duration: {sum_duration}, speech_chunks_timestamp:{speech_chunks_timestamp}")
+
+
         # Process the last segment if its no_speech_prob is acceptable.
         # if self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
-        if not self.is_segment_invalid(segments[-1]):
-            maybe_hullucination = False
+        maybe_hullucination = False
+        if len(segments) > 0 and self.is_segment_invalid(segments[-1]):
+            maybe_hullucination = True
+        if len(segments) > 0 and not self.is_segment_invalid(segments[-1]):
             start_time = self.get_segment_start(segments[-1])
             end_time = self.get_segment_end(segments[-1])
             if end_time > duration + 0.1:
@@ -475,6 +599,13 @@ class ServeClientBase(object):
                     splited_segments = self.split_segments(segments[0])
                     # 用分割后的segments替换原始segments
                     segments = splited_segments
+                # 新增逻辑：当只有一个segment时，检查是否需要根据时间间隔分割
+                if len(segments) == 1 and end_time - start_time > SPLIT_SEGMENTS_BY_PAUSE_THRESHOLD and hasattr(segments[0], 'words') and segments[0].words:
+                    # 先尝试按时间间隔分割
+                    pause_segments = self.split_segments_by_pause(segments[0], SPLIT_SEGMENTS_BY_PAUSE_THRESHOLD)
+                    if len(pause_segments) > 1:
+                        logging.info(f"Split segment by pause into {len(pause_segments)} parts, before segments:{segments}, splited segments:{pause_segments}")
+                        segments = pause_segments
                 self.current_out += segments[-1].text
                 with self.lock:
                     last_segment = self.format_segment(
@@ -483,6 +614,8 @@ class ServeClientBase(object):
                         self.current_out,
                         completed=False
                     )
+
+        last_segment_is_completed_by_last_vad_long = last_segment_is_completed_by_last_vad_long and not maybe_hullucination
         # Process complete segments only if there are more than one
         # and if the last segment's no_speech_prob is below the threshold.
         # if len(segments) > 1 and self.get_segment_no_speech_prob(segments[-1]) <= self.no_speech_thresh:
@@ -531,15 +664,23 @@ class ServeClientBase(object):
 
         # If the same incomplete segment is repeated too many times,
         # append it to the transcript and update the offset.
-        not_output_because_same_output = is_same_output and self.same_output_count <= self.same_output_threshold
-        logging.debug(f"same_output_count: {self.same_output_count}, is_same_output: {is_same_output}, not_output_because_same_output: {not_output_because_same_output}")
-        if self.same_output_count > self.same_output_threshold:
+        not_output_because_same_output = is_same_output and self.same_output_count <= self.same_output_threshold and not last_segment_is_completed_by_last_vad_long
+        logging.debug(f"same_output_count: {self.same_output_count}, is_same_output: {is_same_output}, not_output_because_same_output: {not_output_because_same_output}, last_segment_is_completed_by_last_vad_long:{last_segment_is_completed_by_last_vad_long}")
+        if self.same_output_count > self.same_output_threshold or last_segment_is_completed_by_last_vad_long:
+            logging.info(f"[test1] change the last segment to completed, as same_output_count > self.same_output_threshold:{self.same_output_count > self.same_output_threshold} or last_segment_is_completed_by_last_vad_long:{last_segment_is_completed_by_last_vad_long}")
+            end_time = self.end_time_for_same_output if self.same_output_count > self.same_output_threshold else self.get_segment_end(segments[-1])
             if not self.text or self.text[-1].strip().lower() != self.current_out.strip().lower():
                 self.text.append(self.current_out)
                 with self.lock:
+                    # completed_segment = self.format_segment(
+                    #     self.timestamp_offset,
+                    #     self.timestamp_offset + min(duration, self.end_time_for_same_output),
+                    #     self.current_out,
+                    #     completed=True
+                    # )
                     completed_segment = self.format_segment(
-                        self.timestamp_offset,
-                        self.timestamp_offset + min(duration, self.end_time_for_same_output),
+                        self.timestamp_offset + self.get_segment_start(segments[-1]),
+                        self.timestamp_offset + min(duration, end_time),
                         self.current_out,
                         completed=True
                     )
@@ -553,7 +694,7 @@ class ServeClientBase(object):
                             logging.warning("Translation queue is full, skipping segment")
 
             self.current_out = ''
-            offset = min(duration, self.end_time_for_same_output)
+            offset = min(duration, end_time)
             self.same_output_count = 0
             last_segment = None
             self.end_time_for_same_output = None
@@ -564,7 +705,7 @@ class ServeClientBase(object):
             with self.lock:
                 self.timestamp_offset += offset
 
-        if last_segment is not None:
+        if last_segment is not None and not not_output_because_same_output:
             changing_segments = changing_segments + [last_segment]
-        logging.info(f"IN: segments: {segments},\n OUT: last_segment: {last_segment}, \nnot_output_because_same_output: {not_output_because_same_output}, \nchanging_segments: {changing_segments}\nuser_id: {self.client_uid}")
+        logging.info(f"OUT: last_segment: {last_segment}, \nnot_output_because_same_output: {not_output_because_same_output}, \nchanging_segments: {changing_segments}\nuser_id: {self.client_uid}")
         return last_segment, not_output_because_same_output, changing_segments

@@ -220,6 +220,9 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         if self.language is None and info is not None:
             self.set_language(info)
+        # add info to result list
+        if result:
+            result.append(info)
         return result
 
     def handle_transcription_output(self, result, duration):
@@ -234,8 +237,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(result):
             self.t_start = None
             last_segment, not_output_because_same_output, changing_segments = self.update_segments(result, duration)
-            if not_output_because_same_output:
-                return
+            # if not_output_because_same_output:
+            #     return
             # segments = self.prepare_segments(last_segment)
             segments = changing_segments
 

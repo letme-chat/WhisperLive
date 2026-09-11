@@ -109,6 +109,7 @@ class TranscriptionInfo:
     all_language_probs: Optional[List[Tuple[str, float]]]
     transcription_options: TranscriptionOptions
     vad_options: VadOptions
+    speech_chunks_timestamp: Optional[List]
 
 
 class BatchedInferencePipeline:
@@ -835,13 +836,23 @@ class WhisperModel:
             elif isinstance(vad_parameters, dict):
                 vad_parameters = VadOptions(**vad_parameters)
             speech_chunks = get_speech_timestamps(audio, vad_parameters)
+            speech_chunks_timestamp = []
+            for speech_chunk in speech_chunks:
+                speech_chunk_timestamp = {}
+                speech_chunk_timestamp["start"] = speech_chunk["start"] / sampling_rate
+                speech_chunk_timestamp["end"] = speech_chunk["end"] / sampling_rate
+                speech_chunks_timestamp.append(speech_chunk_timestamp)
             audio_chunks, chunks_metadata = collect_chunks(audio, speech_chunks)
             audio = np.concatenate(audio_chunks, axis=0)
             duration_after_vad = audio.shape[0] / sampling_rate
 
+            last_end_timestamp = 0
+            for chunk_timestapms in speech_chunks:
+                end_timestamp = chunk_timestapms.get("end", 0) / sampling_rate
+                last_end_timestamp = max(last_end_timestamp, end_timestamp)
+
             self.logger.info(
-                "VAD filter removed %s of audio",
-                format_timestamp(duration - duration_after_vad),
+                f"[test]VAD filter removed {format_timestamp(duration - duration_after_vad)} of audio, original duration:{duration}, duration_after_vad:{duration_after_vad}, speech_chunks:{speech_chunks}"
             )
 
             if self.logger.isEnabledFor(logging.DEBUG):
@@ -963,6 +974,7 @@ class WhisperModel:
             language_probability=language_probability,
             duration=duration,
             duration_after_vad=duration_after_vad,
+            speech_chunks_timestamp=speech_chunks_timestamp,
             transcription_options=options,
             vad_options=vad_parameters,
             all_language_probs=all_language_probs,
